@@ -12,7 +12,7 @@ def get_db():
 
 def cal_populationDensity(start_lon,start_lat,end_lon,end_lat):
     data = pd.read_csv('population_density.csv')
-    data = data[(data['X'] >= start_lon) & (data['X'] <= end_lon) & (data['Y'] >= start_lat) & (data['Y'] <= end_lat)]
+    data = data[(data['X'] >= start_lon) & (data['X'] <= end_lon) & (data['Y'] >= end_lat) & (data['Y'] <= start_lat)]
     population_density = np.mean(data['Z'])
     print(population_density)
     return population_density
@@ -22,7 +22,7 @@ def cal_housePrice(start_lon,start_lat,end_lon,end_lat):
     # 
     conn = get_db()
     cur = conn.cursor()
-    query = "SELECT * FROM houseprice WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,start_lat,end_lat)
+    query = "SELECT * FROM houseprice WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,end_lat,start_lat)
     query_result = cur.execute(query)
     df = pd.DataFrame(query_result.fetchall(), columns=['cityname','zone','name','address','price','lon','lat'])
     # 计算网格内小区房价平均值
@@ -47,7 +47,7 @@ def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat):
     SELECT 'yzbank' as type, name, lon, lat, address  FROM yzbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     """
     
-    params = (start_lon, end_lon, start_lat, end_lat) * 5
+    params = (start_lon, end_lon, end_lat, start_lat) * 5
     combined_query_result = cur.execute(combined_query, params)
     combined_df = pd.DataFrame(combined_query_result.fetchall(), columns=[ 'type','name', 'lon', 'lat', 'address'])
     
@@ -90,4 +90,33 @@ def cal_score(start_lon,start_lat,end_lon,end_lat):
 
 
 
-cal_populationDensity(103.55,30.55,103.56,30.56)
+# cal_populationDensity(103.55,30.55,103.56,30.56)
+
+# 获取POI表格详情
+def getPOIDetail(type,start_lon,start_lat,end_lon,end_lat):
+    conn = get_db()
+    cur = conn.cursor()
+    # 判断POI类型
+    if type == '银行':
+        table_name = 'jpbank'
+    elif type == '物流':
+        table_name = 'wuliu'
+    elif type == '餐饮':
+        table_name = 'canyin'
+    elif type == '企业':
+        table_name = 'company'
+    elif type == '商场':
+        table_name = 'mall'
+    
+    query = "SELECT name,cityname,adname,address FROM {} WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(table_name,start_lon,end_lon,end_lat,start_lat)
+    quere_result = cur.execute(query)
+    df = pd.DataFrame(quere_result.fetchall(), columns=['name','cityname','adname','address'])
+    # 拼接地址
+    df['address'] = df['cityname'] + df['adname'] + df['address']
+    df.drop(['cityname','adname'],axis=1,inplace=True)
+    # 转换为对象数组
+    table_result = df.to_dict(orient='records')
+    # print(table_result)
+    return table_result
+
+getPOIDetail('餐饮',102.26,27.92,102.27,27.91)
