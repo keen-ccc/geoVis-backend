@@ -119,4 +119,96 @@ def getPOIDetail(type,start_lon,start_lat,end_lon,end_lat):
     # print(table_result)
     return table_result
 
-getPOIDetail('餐饮',102.26,27.92,102.27,27.91)
+# getPOIDetail('餐饮',102.26,27.92,102.27,27.91)
+
+# 获取网格 市场经营主体 行业门类
+def getIndustry(start_lon,start_lat,end_lon,end_lat):
+    conn = get_db()
+    cur = conn.cursor()
+    # query = "SELECT hyclass,hycode FROM entity WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,end_lat,start_lat)
+    query = "SELECT hyclass,hycode FROM entity limit 1000"
+    query_result = cur.execute(query)
+    df = pd.DataFrame(query_result.fetchall(), columns=['class','code'])
+    industry_result = {
+        "name":"经营主体",
+        "children":[]
+    }    
+    # A-T 20个行业门类
+    industry = ['农、林、牧、渔业','采矿业','制造业','电力、热力、燃气及水生产和供应业','建筑业','批发和零售业','交通运输、仓储和邮政业','住宿和餐饮业','信息传输、软件和信息技术服务业','金融业','房地产业','租赁和商务服务业','科学研究和技术服务业','水利、环境和公共设施管理业','居民服务、修理和其他服务业','教育','卫生和社会工作','文化、体育和娱乐业','公共管理、社会保障和社会组织','国际组织']
+    # 根据行业代码 统计每个行业下的每个大类的数量
+    for i in range(1,21):
+        # 用i表示字母
+        data = df[df['class'] == chr(64+i)]
+        industry_result["children"].append({
+                "name":industry[i-1],
+                "children":[
+                ]
+        })
+        # 如果i为1
+        if i == 1:
+            # 统计第一位数字为1-5的数量
+            category = data['code'].apply(lambda x: x[0]).value_counts()
+            for j in list(category.index):
+                industry_result["children"][-1]["children"].append({
+                    "name":j,
+                    "value":category[j]
+                })
+        # 如果i为2
+        elif i == 2:
+            # 初始化计数字典
+            count_3_digits = {}
+            count_4_digits = {}
+            #如果code为3位 统计第一位数字为6-9的数量
+            # 遍历code
+            for code in data['code']:
+                # print(code,len(code))
+                if len(code) == 3 and code[0] in ['6', '7', '8', '9']:
+                    # 取第一位字符
+                    first_digit = code[0]
+                    # 计数
+                    if first_digit in count_3_digits:
+                        count_3_digits[first_digit] += 1
+                    else:
+                        count_3_digits[first_digit] = 1
+                elif len(code) == 4:
+                    # 取前两位字符
+                    first_two_digits = code[:2]
+                    # 计数
+                    if first_two_digits in count_4_digits:
+                        count_4_digits[first_two_digits] += 1
+                    else:
+                        count_4_digits[first_two_digits] = 1
+            # 合并计数结果
+            count_3_digits.update(count_4_digits)
+            # print(count_3_digits)
+            for j in count_3_digits:
+                industry_result["children"][-1]["children"].append({
+                    "name":j,
+                    "value":count_3_digits[j]
+                })
+        # 其余门类 
+        else:
+            category = data['code'].apply(lambda x: x[:2]).value_counts()
+            for j in list(category.index):
+                industry_result["children"][-1]["children"].append({
+                    "name":j,
+                    "value":category[j]
+                })
+    print(industry_result)
+    return industry_result
+
+
+# 获取网格内实体详情
+def getIndustryDetail(start_lon,start_lat,end_lon,end_lat):
+    conn = get_db()
+    cur = conn.cursor()
+    # query = "SELECT name,address,businessscope FROM entity WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,end_lat,start_lat)
+    query = "SELECT name,address,businessscope FROM entity limit 100"
+    query_result = cur.execute(query)
+    df = pd.DataFrame(query_result.fetchall(),columns=['name','address','businessscope'])
+    # print(df)
+    entity_result = df.to_dict(orient='records')
+    # print(entity_result)
+    return entity_result
+
+getIndustryDetail(102.26,27.92,102.27,27.91)
