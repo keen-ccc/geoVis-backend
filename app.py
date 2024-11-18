@@ -99,6 +99,7 @@ def cal_score():
     # poiDensityWeight = 1 - 0.6428892367629705 = 0.3571107632370295
     # poiDiversityWeight = 1 - 0.6915434317121325 = 0.3084565682878675
     data = request.get_json()
+    gridID = data.get('gridID')
     start_lon = data.get('start_lon')
     start_lat = data.get('start_lat')
     end_lon = data.get('end_lon')
@@ -108,7 +109,7 @@ def cal_score():
     poiDensityWeight = data.get('poiDensityWeight')
     poiDiversityWeight = data.get('poiDiversityWeight')
     print('--------------------------------------------------------')
-    print(start_lon,start_lat,end_lon,end_lat,populationWeight,housePriceWeight,poiDensityWeight,poiDiversityWeight)
+    print(gridID,start_lon,start_lat,end_lon,end_lat,populationWeight,housePriceWeight,poiDensityWeight,poiDiversityWeight)
 
     # 确保所有参数都存在
     if None in [start_lon, start_lat, end_lon, end_lat, populationWeight, housePriceWeight, poiDensityWeight, poiDiversityWeight]:
@@ -123,7 +124,7 @@ def cal_score():
     score = populationWeight * population_density + housePriceWeight * house_price + poiDensityWeight * poi_density + poiDiversityWeight * poi_diversity
     
     
-    return jsonify({'value': value, 'score': score})
+    return jsonify({'value': value, 'score': score,'gridID':gridID})
 
 # cal_populationDensity(103.55,30.55,103.56,30.56)
 
@@ -269,7 +270,7 @@ def getIndustryDetail():
     df['hycode'] = df['hycode'].apply(lambda x:x.split('.')[0])
     # print(df)
     entity_result = df.to_dict(orient='records')
-    print("实体表格：",entity_result)
+    # print("实体表格：",entity_result)
     return entity_result
 
 # getIndustryDetail(102.26,27.92,102.27,27.91)
