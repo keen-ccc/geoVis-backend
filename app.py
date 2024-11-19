@@ -32,6 +32,9 @@ def cal_housePrice(start_lon,start_lat,end_lon,end_lat):
     # 计算网格内小区房价平均值
     mean_price = df['price'].mean()
     print("房价：",mean_price)
+    # 如果为nan
+    if np.isnan(mean_price):
+        mean_price = 0
     return mean_price
 
 def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat):
@@ -108,8 +111,9 @@ def cal_score():
     housePriceWeight = data.get('housePriceWeight')
     poiDensityWeight = data.get('poiDensityWeight')
     poiDiversityWeight = data.get('poiDiversityWeight')
+    sum_weight = data.get('sumWeight')
     print('--------------------------------------------------------')
-    print(gridID,start_lon,start_lat,end_lon,end_lat,populationWeight,housePriceWeight,poiDensityWeight,poiDiversityWeight)
+    print(gridID,start_lon,start_lat,end_lon,end_lat,populationWeight,housePriceWeight,poiDensityWeight,poiDiversityWeight,sum_weight)
 
     # 确保所有参数都存在
     if None in [start_lon, start_lat, end_lon, end_lat, populationWeight, housePriceWeight, poiDensityWeight, poiDiversityWeight]:
@@ -121,7 +125,14 @@ def cal_score():
     # score = sum([population_density,house_price,poi_density, poi_diversity]) / sum_weight
     
     value = [population_density,house_price,poi_density, poi_diversity]
-    score = populationWeight * population_density + housePriceWeight * house_price + poiDensityWeight * poi_density + poiDiversityWeight * poi_diversity
+    # 归一化
+    scale_population_density = (population_density) / 165134.45
+    scale_house_price = (house_price) / 55852.33
+    scale_poi_density = (poi_density) / 1333
+    scale_poi_diversity = (poi_diversity) / 1.55
+
+    print(scale_population_density,scale_house_price,scale_poi_density,scale_poi_diversity)
+    score = populationWeight/sum_weight * scale_population_density + housePriceWeight/sum_weight * scale_house_price + poiDensityWeight/sum_weight * scale_poi_density + poiDiversityWeight/sum_weight * scale_poi_diversity
     
     
     return jsonify({'value': value, 'score': score,'gridID':gridID})
@@ -155,13 +166,12 @@ def getPOIDetail():
     query = "SELECT name,cityname,adname,address FROM {} WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(table_name,start_lon,end_lon,start_lat,end_lat)
     quere_result = cur.execute(query)
     df = pd.DataFrame(quere_result.fetchall(), columns=['name','cityname','adname','address'])
-    print("POI详情：",df.head())
     # 拼接地址
     df['address'] = df['cityname'] + df['adname'] + df['address']
     df.drop(['cityname','adname'],axis=1,inplace=True)
     # 转换为对象数组
     table_result = df.to_dict(orient='records')
-    print(table_result)
+    # print(table_result)
     return jsonify(table_result)
 
 # getPOIDetail('餐饮',102.26,27.92,102.27,27.91)
@@ -179,7 +189,7 @@ def getIndustry():
     query = "SELECT hyclass,hycode FROM entity WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,start_lat,end_lat)
     # query = "SELECT hyclass,hycode FROM entity limit 1000"
     query_result = cur.execute(query)
-    print("树结果:",query_result)
+    # print("树结果:",query_result)
     df = pd.DataFrame(query_result.fetchall(), columns=['class','code'])
     industry_result = {
         "name":"经营主体",
@@ -246,7 +256,7 @@ def getIndustry():
                     "name":j,
                     "value":int(category[j])
                 })
-    print("tree 数据：",industry_result)
+    # print("tree 数据：",industry_result)
     return jsonify(industry_result)
 
 
