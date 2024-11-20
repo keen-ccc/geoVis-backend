@@ -8,6 +8,7 @@ import dask.dataframe as dd
 
 
 app = Flask(__name__)
+app.debug = True
 CORS(app)
 
 def get_db():
@@ -93,6 +94,60 @@ def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat):
     print("网格POI多样性：",poi_diversity)
 
     return poi_density, poi_diversity
+
+@app.route('/api/get_poiNum', methods=['GET'])
+def cal_poiNumber():
+    data = np.load('poi_density.npy')
+    return jsonify({'poiMax':np.max(data)})
+
+@app.route('/api/cal_poiNum', methods=['POST'])
+def cal_poiNum():
+    data = request.get_json()
+    # gridID = data.get('gridID')
+    start_lon = data.get('start_lon')
+    start_lat = data.get('start_lat')
+    end_lon = data.get('end_lon')
+    end_lat = data.get('end_lat')
+
+    conn = get_db()
+    cur = conn.cursor()
+    
+    # 合并查询餐饮、企业、商场和银行POI数量
+    combined_query = """
+    SELECT 'canyin' as type,  name, lon, lat, address FROM canyin WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'company' as type,  name, lon, lat, address FROM company WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'mall' as type,  name, lon, lat, address FROM mall WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'jpbank' as type, name, lon, lat, address FROM jpbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'yzbank' as type, name, lon, lat, address  FROM yzbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'express' as type, name, lon, lat, address  FROM express WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    """
+    
+    params = (start_lon, end_lon, start_lat, end_lat) * 6
+    combined_query_result = cur.execute(combined_query, params)
+    combined_df = pd.DataFrame(combined_query_result.fetchall(), columns=[ 'type','name', 'lon', 'lat', 'address'])
+    
+    # 计算各类别POI数量
+    # 计算每个类别的POI数量
+    canyin_count = combined_df[combined_df['type'] == 'canyin'].shape[0]
+    company_count = combined_df[combined_df['type'] == 'company'].shape[0]
+    mall_count = combined_df[combined_df['type'] == 'mall'].shape[0]
+    jpbank_count = combined_df[combined_df['type'] == 'jpbank'].shape[0]
+    yzbank_count = combined_df[combined_df['type'] == 'yzbank'].shape[0]
+    bank_count = jpbank_count + yzbank_count
+    express_count = combined_df[combined_df['type'] == 'express'].shape[0]
+    
+    print("餐饮：",canyin_count)
+    print("企业：",company_count)
+    print("商场：",mall_count)
+    print("银行",bank_count)
+    print("物流",express_count)
+
+    return jsonify({'canyin': canyin_count, 'company': company_count,'mall':mall_count, 'bank':bank_count, 'express':express_count})
 
 @app.route('/api/cal_score', methods=['POST'])
 def cal_score():
