@@ -5,22 +5,29 @@ import sqlite3
 from flask_cors import CORS
 import geopandas as gpd
 import dask.dataframe as dd
+import re
+import math
 
 
 app = Flask(__name__)
 app.debug = True
 CORS(app)
-
+population_data = pd.read_csv('population_density_split.csv')
 def get_db():
     conn = sqlite3.connect('geovis.sqlite')
     return conn
 
 def cal_populationDensity(start_lon,start_lat,end_lon,end_lat):
-    data = pd.read_csv('population_density_split.csv')
-    print("人口密度数据：",data.head())
-    data = data[(data['X'] >= start_lon) & (data['X'] <= end_lon) & (data['Y'] >= start_lat) & (data['Y'] <= end_lat)]
-    print("人口密度数据：",data)
-    population_density = np.mean(data['Z'])
+    # 高德坐标转换为WGS84坐标
+    start_lon,start_lat = gcj02_to_wgs84(start_lon,start_lat)
+    end_lon,end_lat = gcj02_to_wgs84(end_lon,end_lat)
+    # data = pd.read_csv('population_density_split.csv')
+    # print("人口密度数据：",data.head())
+    filter_data = population_data[(population_data['X'] >= start_lon) & (population_data['X'] <= end_lon) & (population_data['Y'] >= start_lat) & (population_data['Y'] <= end_lat)]
+    print("人口密度数据：",filter_data)
+    if filter_data.shape[0] == 0:
+        return 0
+    population_density = np.mean(filter_data['Z'])
     print("人口密度：",population_density)
     return population_density
 
@@ -208,19 +215,33 @@ def getPOIDetail():
     cur = conn.cursor()
     # 判断POI类型
     if type == '银行':
-        table_name = 'jpbank'
+        table_name = 'bank'
     elif type == '物流':
         table_name = 'express'
     elif type == '餐饮':
         table_name = 'canyin'
     elif type == '企业':
         table_name = 'company'
-    elif type == '商场':
-        table_name = 'mall'
+    elif type == '购物':
+        table_name = 'gouwu'
+    elif type == '医疗':
+        table_name = 'yiliao'
+    elif type == '科教文化':
+        table_name = 'wenhua'
+    elif type == '住宿':
+        table_name = 'zhusu'
+    elif type == '政府机构':
+        table_name = 'zhengfu'
+    elif type == '娱乐':
+        table_name = 'yule'
+    elif type == '汽车销售':
+        table_name = 'qichexiaoshou'
+    elif type == '汽车服务':
+        table_name = 'qichefuwu'
     
-    query = "SELECT name,cityname,adname,address FROM {} WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(table_name,start_lon,end_lon,start_lat,end_lat)
+    query = "SELECT name,cityname,adname,address,lon,lat FROM {} WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(table_name,start_lon,end_lon,start_lat,end_lat)
     quere_result = cur.execute(query)
-    df = pd.DataFrame(quere_result.fetchall(), columns=['name','cityname','adname','address'])
+    df = pd.DataFrame(quere_result.fetchall(), columns=['name','cityname','adname','address','lon','lat'])
     # 拼接地址
     df['address'] = df['cityname'] + df['adname'] + df['address']
     df.drop(['cityname','adname'],axis=1,inplace=True)
@@ -314,6 +335,17 @@ def getIndustry():
     # print("tree 数据：",industry_result)
     return jsonify(industry_result)
 
+def simplify_businessscope(scope):
+    # 删除括号内的文字（中英文）
+    scope = re.sub(r'\（.*?\）', '', scope)
+    scope = re.sub(r'\(.*?\)', '', scope)
+    # 保留第二个分号前的内容
+    parts = scope.split('；')
+    if len(parts) >= 2:
+        scope = '；'.join(parts[:2])
+    # 删除多余的空格和分号
+    # scope = scope.replace('；', '； ').strip()
+    return scope
 
 # 获取网格内实体详情
 @app.route('/api/getIndustryDetail', methods=['POST'])
@@ -329,6 +361,8 @@ def getIndustryDetail():
     # query = "SELECT name,address,businessscope FROM entity limit 100"
     query_result = cur.execute(query)
     df = pd.DataFrame(query_result.fetchall(),columns=['name','address','businessscope','hyclass','hycode'])
+    # 简化经营范围
+    df['businessscope'] = df['businessscope'].apply(simplify_businessscope)
     # 行业门类映射成文字 A-T
     industry = ['农、林、牧、渔业','采矿业','制造业','电力、热力、燃气及水生产和供应业','建筑业','批发和零售业','交通运输、仓储和邮政业','住宿和餐饮业','信息传输、软件和信息技术服务业','金融业','房地产业','租赁和商务服务业','科学研究和技术服务业','水利、环境和公共设施管理业','居民服务、修理和其他服务业','教育','卫生和社会工作','文化、体育和娱乐业','公共管理、社会保障和社会组织','国际组织']
     df['hyclass'] = df['hyclass'].apply(lambda x: industry[ord(x)-65])
@@ -339,6 +373,45 @@ def getIndustryDetail():
     return entity_result
 
 # getIndustryDetail(102.26,27.92,102.27,27.91)
+
+# 高德坐标系(GCJ-02)转换为WGS84坐标系
+def gcj02_to_wgs84(lng, lat):
+    def transformlat(lng, lat):
+        ret = -100.0 + 2.0 * lng + 3.0 * lat + 0.2 * lat * lat + 0.1 * lng * lat + 0.2 * math.sqrt(abs(lng))
+        ret += (20.0 * math.sin(6.0 * lng * math.pi) + 20.0 * math.sin(2.0 * lng * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(lat * math.pi) + 40.0 * math.sin(lat / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (160.0 * math.sin(lat / 12.0 * math.pi) + 320 * math.sin(lat * math.pi / 30.0)) * 2.0 / 3.0
+        return ret
+
+    def transformlng(lng, lat):
+        ret = 300.0 + lng + 2.0 * lat + 0.1 * lng * lng + 0.1 * lng * lat + 0.1 * math.sqrt(abs(lng))
+        ret += (20.0 * math.sin(6.0 * lng * math.pi) + 20.0 * math.sin(2.0 * lng * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(lng * math.pi) + 40.0 * math.sin(lng / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (150.0 * math.sin(lng / 12.0 * math.pi) + 300.0 * math.sin(lng / 30.0 * math.pi)) * 2.0 / 3.0
+        return ret
+
+    def out_of_china(lng, lat):
+        if lng < 72.004 or lng > 137.8347:
+            return True
+        if lat < 0.8293 or lat > 55.8271:
+            return True
+        return False
+
+    if out_of_china(lng, lat):
+        return lng, lat
+
+    dlat = transformlat(lng - 105.0, lat - 35.0)
+    dlng = transformlng(lng - 105.0, lat - 35.0)
+    radlat = lat / 180.0 * math.pi
+    magic = math.sin(radlat)
+    magic = 1 - 0.00669342162296594323 * magic * magic
+    sqrtmagic = math.sqrt(magic)
+    dlat = (dlat * 180.0) / ((6335552.717000426 / (magic * sqrtmagic)) * math.pi)
+    dlng = (dlng * 180.0) / ((6378245.0 / sqrtmagic) * math.cos(radlat) * math.pi)
+    mglat = lat + dlat
+    mglng = lng + dlng
+    return lng * 2 - mglng, lat * 2 - mglat
+
 
 if __name__ == '__main__':
     app.run()
