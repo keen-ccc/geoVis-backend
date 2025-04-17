@@ -45,26 +45,40 @@ def cal_housePrice(start_lon,start_lat,end_lon,end_lat):
         mean_price = 0
     return mean_price
 
-def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat):
+def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat,grid_size):
     conn = get_db()
     cur = conn.cursor()
     
-    # 合并查询餐饮、企业、商场和银行POI数量
+    # 合并查询POI数量
     combined_query = """
     SELECT 'canyin' as type,  name, lon, lat, address FROM canyin WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     UNION ALL
     SELECT 'company' as type,  name, lon, lat, address FROM company WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     UNION ALL
-    SELECT 'mall' as type,  name, lon, lat, address FROM mall WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    SELECT 'gouwu' as type,  name, lon, lat, address FROM mall WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     UNION ALL
-    SELECT 'jpbank' as type, name, lon, lat, address FROM jpbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'yzbank' as type, name, lon, lat, address  FROM yzbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    SELECT 'gdBank' as type, name, lon, lat, address FROM jpbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     UNION ALL
     SELECT 'express' as type, name, lon, lat, address  FROM express WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'yiliao' as type, name, lon, lat, address  FROM yiliao WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'wenhua' as type, name, lon, lat, address  FROM wenhua WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'zhusu' as type, name, lon, lat, address  FROM zhusu WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'zhengfu' as type, name, lon, lat, address  FROM zhengfu WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'yule' as type, name, lon, lat, address  FROM yule WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'qichexiaoshou' as type, name, lon, lat, address  FROM qichexiaoshou WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL
+    SELECT 'qichefuwu' as type, name, lon, lat, address  FROM qichefuwu WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
+    UNION ALL 
+    SELECT 'zhuzhai' as type, name, lon, lat, address  FROM qichefuwu WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
     """
     
-    params = (start_lon, end_lon, start_lat, end_lat) * 6
+    params = (start_lon, end_lon, start_lat, end_lat) * 13
     combined_query_result = cur.execute(combined_query, params)
     combined_df = pd.DataFrame(combined_query_result.fetchall(), columns=[ 'type','name', 'lon', 'lat', 'address'])
     
@@ -72,89 +86,46 @@ def cal_poiDensity_poiDiversity(start_lon, start_lat, end_lon, end_lat):
     # 计算每个类别的POI数量
     canyin_count = combined_df[combined_df['type'] == 'canyin'].shape[0]
     company_count = combined_df[combined_df['type'] == 'company'].shape[0]
-    mall_count = combined_df[combined_df['type'] == 'mall'].shape[0]
-    jpbank_count = combined_df[combined_df['type'] == 'jpbank'].shape[0]
-    yzbank_count = combined_df[combined_df['type'] == 'yzbank'].shape[0]
-    bank_count = jpbank_count + yzbank_count
+    gouwu_count = combined_df[combined_df['type'] == 'mall'].shape[0]
+    # jpbank_count = combined_df[combined_df['type'] == 'jpbank'].shape[0]
+    # yzbank_count = combined_df[combined_df['type'] == 'yzbank'].shape[0]
+    # bank_count = jpbank_count + yzbank_count
+    bank_count = combined_df[combined_df['type'] == 'gdBank'].shape[0]
     express_count = combined_df[combined_df['type'] == 'express'].shape[0]
+    yiliao_count = combined_df[combined_df['type'] == 'yiliao'].shape[0]
+    wenhua_count = combined_df[combined_df['type'] == 'wenhua'].shape[0]
+    zhusu_count = combined_df[combined_df['type'] == 'zhusu'].shape[0]
+    zhengfu_count = combined_df[combined_df['type'] == 'zhengfu'].shape[0]
+    yule_count = combined_df[combined_df['type'] == 'yule'].shape[0]
+    qichexiaoshou_count = combined_df[combined_df['type'] == 'qichexiaoshou'].shape[0]
+    qichefuwu_count = combined_df[combined_df['type'] == 'qichefuwu'].shape[0]
+    zhuzhai_count = combined_df[combined_df['type'] == 'zhuzhai'].shape[0]
     
-    print("餐饮：",canyin_count)
-    print("企业：",company_count)
-    print("商场：",mall_count)
-    print("银行",bank_count)
-    print("物流",express_count)
+    # print("餐饮：",canyin_count)
+    # print("企业：",company_count)
+    # print("商场：",gouwu_count)
+    # print("银行",bank_count)
+    # print("物流",express_count)
 
     # 计算总数
     poi_count = combined_df.shape[0]
     # 计算密度
     # poi_density = poi_count / ((end_lon - start_lon) * (end_lat - start_lat))
     # 1平方千米
-    poi_density = poi_count / 1
+    # poi_density = poi_count / 1
+    poi_density = poi_count / (grid_size * grid_size / 1000000)
     # 计算多样性
     # 如果除数为0
     if poi_count == 0:
         poi_diversity = 0
     else:
-        poi_diversity = -sum([x / poi_count * np.log(x / poi_count) for x in [canyin_count, company_count, mall_count, bank_count,express_count] if x != 0])
+        poi_diversity = -sum([x / poi_count * np.log(x / poi_count) for x in [canyin_count, company_count, gouwu_count, bank_count,express_count,yiliao_count,wenhua_count,zhusu_count,zhengfu_count,yule_count,qichefuwu_count,qichexiaoshou_count,zhuzhai_count] if x != 0])
     print("网格POI数量：",poi_count)
     print("网格POI密度：",poi_density)
     print("网格POI多样性：",poi_diversity)
 
     return poi_density, poi_diversity
 
-@app.route('/api/get_poiNum', methods=['GET'])
-def cal_poiNumber():
-    data = np.load('poi_density.npy')
-    return jsonify({'poiMax':np.max(data)})
-
-@app.route('/api/cal_poiNum', methods=['POST'])
-def cal_poiNum():
-    data = request.get_json()
-    # gridID = data.get('gridID')
-    start_lon = data.get('start_lon')
-    start_lat = data.get('start_lat')
-    end_lon = data.get('end_lon')
-    end_lat = data.get('end_lat')
-
-    conn = get_db()
-    cur = conn.cursor()
-    
-    # 合并查询餐饮、企业、商场和银行POI数量
-    combined_query = """
-    SELECT 'canyin' as type,  name, lon, lat, address FROM canyin WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'company' as type,  name, lon, lat, address FROM company WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'mall' as type,  name, lon, lat, address FROM mall WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'jpbank' as type, name, lon, lat, address FROM jpbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'yzbank' as type, name, lon, lat, address  FROM yzbank WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    UNION ALL
-    SELECT 'express' as type, name, lon, lat, address  FROM express WHERE lon BETWEEN ? AND ? AND lat BETWEEN ? AND ?
-    """
-    
-    params = (start_lon, end_lon, start_lat, end_lat) * 6
-    combined_query_result = cur.execute(combined_query, params)
-    combined_df = pd.DataFrame(combined_query_result.fetchall(), columns=[ 'type','name', 'lon', 'lat', 'address'])
-    
-    # 计算各类别POI数量
-    # 计算每个类别的POI数量
-    canyin_count = combined_df[combined_df['type'] == 'canyin'].shape[0]
-    company_count = combined_df[combined_df['type'] == 'company'].shape[0]
-    mall_count = combined_df[combined_df['type'] == 'mall'].shape[0]
-    jpbank_count = combined_df[combined_df['type'] == 'jpbank'].shape[0]
-    yzbank_count = combined_df[combined_df['type'] == 'yzbank'].shape[0]
-    bank_count = jpbank_count + yzbank_count
-    express_count = combined_df[combined_df['type'] == 'express'].shape[0]
-    
-    print("餐饮：",canyin_count)
-    print("企业：",company_count)
-    print("商场：",mall_count)
-    print("银行",bank_count)
-    print("物流",express_count)
-
-    return jsonify({'canyin': canyin_count, 'company': company_count,'mall':mall_count, 'bank':bank_count, 'express':express_count})
 
 @app.route('/api/cal_score', methods=['POST'])
 def cal_score():
@@ -174,6 +145,7 @@ def cal_score():
     poiDensityWeight = data.get('poiDensityWeight')
     poiDiversityWeight = data.get('poiDiversityWeight')
     sum_weight = data.get('sumWeight')
+    grid_size = data.get('gridSize')
     print('--------------------------------------------------------')
     print(gridID,start_lon,start_lat,end_lon,end_lat,populationWeight,housePriceWeight,poiDensityWeight,poiDiversityWeight,sum_weight)
 
@@ -183,17 +155,17 @@ def cal_score():
     # sum_weight = 
     population_density = cal_populationDensity(start_lon,start_lat,end_lon,end_lat)
     house_price = cal_housePrice(start_lon,start_lat,end_lon,end_lat) 
-    poi_density, poi_diversity = cal_poiDensity_poiDiversity(start_lon,start_lat,end_lon,end_lat)
+    poi_density, poi_diversity = cal_poiDensity_poiDiversity(start_lon,start_lat,end_lon,end_lat,grid_size)
     # score = sum([population_density,house_price,poi_density, poi_diversity]) / sum_weight
     
     value = [population_density,house_price,poi_density, poi_diversity]
     # 归一化
     scale_population_density = (population_density) / 165134.45
     scale_house_price = (house_price) / 55852.33
-    scale_poi_density = (poi_density) / 1333
-    scale_poi_diversity = (poi_diversity) / 1.55
+    scale_poi_density = (poi_density) / 3000   # 1333
+    scale_poi_diversity = (poi_diversity) / 2.1  # 1.55
 
-    print(scale_population_density,scale_house_price,scale_poi_density,scale_poi_diversity)
+    print("归一化后的指标值：",scale_population_density,scale_house_price,scale_poi_density,scale_poi_diversity)
     score = populationWeight/sum_weight * scale_population_density + housePriceWeight/sum_weight * scale_house_price + poiDensityWeight/sum_weight * scale_poi_density + poiDiversityWeight/sum_weight * scale_poi_diversity
     
     
@@ -215,7 +187,7 @@ def getPOIDetail():
     cur = conn.cursor()
     # 判断POI类型
     if type == '银行':
-        table_name = 'bank'
+        table_name = 'gdBank'
     elif type == '物流':
         table_name = 'express'
     elif type == '餐饮':
@@ -238,8 +210,11 @@ def getPOIDetail():
         table_name = 'qichexiaoshou'
     elif type == '汽车服务':
         table_name = 'qichefuwu'
+    elif type == '商务住宅':
+        table_name = 'zhuzhai'
     
     query = "SELECT name,cityname,adname,address,lon,lat FROM {} WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(table_name,start_lon,end_lon,start_lat,end_lat)
+    print("查询语句：",query)
     quere_result = cur.execute(query)
     df = pd.DataFrame(quere_result.fetchall(), columns=['name','cityname','adname','address','lon','lat'])
     # 拼接地址
@@ -265,7 +240,7 @@ def getIndustry():
     query = "SELECT hyclass,hycode FROM entity WHERE lon BETWEEN {} AND {} AND lat BETWEEN {} AND {}".format(start_lon,end_lon,start_lat,end_lat)
     # query = "SELECT hyclass,hycode FROM entity limit 1000"
     query_result = cur.execute(query)
-    # print("树结果:",query_result)
+    # print("查询结果:",query_result.fetchall())
     df = pd.DataFrame(query_result.fetchall(), columns=['class','code'])
     industry_result = {
         "name":"经营主体",
